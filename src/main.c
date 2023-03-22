@@ -119,13 +119,64 @@ void deinit()
     window_deinit();
 }
 
+// variables used to store state
+// demo vars
 int num_clicks = 0;
+uint32_t color1 = 0x00FE2225;
+uint32_t color2 = 0x002468F2;
+float v1 = 0.0;
+float v2 = 0.0;
+char name[20] = {'H','e','l','l','o','\0'};
+char something[20] = {0};
+bool my_check = true;
+int ri = 10;
+bool toggle = false;
 
 void draw()
 {
     gfx_clear_buffer(50,50,50);
 
-    imgui_draw_demo(10, 10); // for showcasing widgets
+    imgui_begin_panel("Demo", 10,10);
+
+        imgui_set_text_size(12);
+        imgui_text_sized(28, "Demo");
+        imgui_text_colored(0x00FF00FF, "Hello, My name is %s", "Chris");
+        imgui_text_colored(0x0000FFFF, "My name is %s", "Kam");
+
+        if(imgui_button("Test Button"))
+        {
+            num_clicks++;
+        }
+        imgui_text_colored(0xFFFFFFFF, "Num clicks: %d", num_clicks);
+
+        imgui_slider_float("Slider 1", 0.0,1.0,&v1);
+        imgui_slider_float("Slider 2", 0.0,1.0,&v2);
+
+        imgui_checkbox("Checkbox 1",&my_check);
+
+        bool thing;
+        imgui_indent_begin(12);
+            imgui_checkbox("whatever",&thing);
+            imgui_checkbox("dawg",&thing);
+        imgui_indent_end();
+
+        imgui_number_box("Some Int##haha",0, 100, &ri);
+
+        imgui_color_picker("Color 1", &color1);
+        imgui_color_picker("Color 2", &color2);
+        imgui_text_colored(0xFFFFFFFF, "Test");
+        imgui_text_box("Name",name,IM_ARRAYSIZE(name));
+        imgui_toggle_button(&toggle, "Toggle me");
+
+        char* buttons[] = {"Apples", "Bananas", "Oranges"};
+        int selection = imgui_button_select(3, buttons, "Best Fruit");
+
+        imgui_text_colored(0x00FF00FF,buttons[selection]);
+
+        char* options[] = {"Goat's Milk", "Steak n Shake", "Hotdogs", "CHX"};
+        int option = imgui_dropdown(options, IM_ARRAYSIZE(options),"Fun Stuff");
+
+   imgui_end();
 
 #if 0
     imgui_begin_panel("Editor", 10, 10);
