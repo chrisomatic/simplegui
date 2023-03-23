@@ -18,7 +18,7 @@ static bool io_file_exists(char* file_path)
     return (access(file_path, F_OK) == 0);
 }
 
-static int io_get_files_in_dir(char* dir_path, char* match_str, char files[][32])
+static int io_get_files_in_dir(char* dir_path, char* match_str, char files[32][32])
 {
 #ifdef _WIN32
 

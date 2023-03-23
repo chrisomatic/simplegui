@@ -14,4 +14,4 @@ gcc core/gfx.c \
     main.c \
     -Icore \
     -lglfw -lGLU -lGLEW -lGL -lm -O2 \
-    -o ../bin/postmortem
+    -o ../bin/gui_test

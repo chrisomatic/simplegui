@@ -2,6 +2,8 @@
 
 This is a simple GUI library written in C
 
+![](screenshot.png)
+
 # Example Code
 
 ```C
@@ -27,6 +29,20 @@ This is a simple GUI library written in C
 
     }
 ```
+
+# Supported Features
+
+- Text
+- Buttons
+- Image Buttons
+- Toggle Buttons
+- Checkboxes
+- Color Picker
+- Number Sliders
+- Number Boxes
+- Text Boxes
+- Dropdown Selects
+- Tooltips
 
 # How to run
 

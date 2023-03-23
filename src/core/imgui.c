@@ -4,6 +4,7 @@
 #include "window.h"
 #include "hash.h"
 #include "log.h"
+#include "io.h"
 #include "imgui.h"
 #include <math.h>
 
@@ -88,46 +89,26 @@ typedef struct
 
 typedef struct
 {
-    // general
-    int spacing;
+    uint32_t color_text;
+    uint32_t color_background;
+    uint32_t color_highlight;
+    uint32_t color_highlight_subtle;
+    uint32_t color_active;
+    uint32_t color_panel;
+    uint32_t color_slider;
 
-    // text
+    int spacing;
     float text_size_px;
-    uint32_t text_color;
     float text_scale;
     int text_padding;
-
-    // button
-    uint32_t button_color_background;
-    uint32_t button_color_background_highlighted;
-    uint32_t button_color_background_active;
-    uint32_t button_color_foreground;
     float button_opacity;
-
-    // checkbox
     int checkbox_size;
-
-    // slider
-    uint32_t slider_color_foreground;
-    uint32_t slider_color_background;
-    uint32_t slider_color_handle;
-    uint32_t slider_color_handle_highlighted;
-    uint32_t slider_color_handle_active;
     float slider_width;
     float slider_handle_width;
     float slider_opacity;
-
-    // number box
     int number_box_width;
-
-    // text_box
-    uint32_t text_box_color_background;
-    uint32_t text_box_color_highlighted;
     int text_box_width;
     int text_box_height;
-
-    // panel
-    uint32_t panel_color;
     float panel_opacity;
     int panel_min_width;
     int panel_spacing;
@@ -166,7 +147,7 @@ static void draw_checkbox(uint32_t hash, char* label, bool result);
 static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format, float val);
 static void draw_color_box(Rect* r, uint32_t color);
 static void draw_label(int x, int y, uint32_t color, char* label);
-static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max);
+static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max, char* format);
 static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text);
 static void draw_dropdown(uint32_t hash, char* str, char** options, int num_options, Rect* r);
 static void draw_panel();
@@ -221,7 +202,7 @@ void imgui_set_text_size(float pxsize)
 
 void imgui_set_text_color(uint32_t color)
 {
-    theme.text_color = color;
+    theme.color_text = color;
 }
 
 void imgui_set_text_padding(int padding)
@@ -257,7 +238,7 @@ void imgui_text(char* text, ...)
     vsprintf(str,text, args);
     va_end(args);
 
-    imgui_text_colored(theme.text_color, str);
+    imgui_text_colored(theme.color_text, str);
 }
 
 void imgui_text_sized(float pxsize, char* text, ...)
@@ -268,7 +249,7 @@ void imgui_text_sized(float pxsize, char* text, ...)
     vsprintf(str,text, args);
     va_end(args);
 
-    Vector2f size = gfx_draw_string(ctx->curr.x, ctx->curr.y, theme.text_color, (pxsize / NOMINAL_FONT_SIZE), 0.0, 1.0, false, false, str);
+    Vector2f size = gfx_draw_string(ctx->curr.x, ctx->curr.y, theme.color_text, (pxsize / NOMINAL_FONT_SIZE), 0.0, 1.0, false, false, str);
     ctx->curr.w = size.x+1.0*theme.spacing;
     ctx->curr.h = 1.3*size.y;
 
@@ -310,7 +291,7 @@ void imgui_newline()
 void imgui_horizontal_line()
 {
     float width = ctx->panel_width - theme.spacing - 2.0*theme.text_padding;
-    gfx_draw_rect_xywh(ctx->curr.x + width/2.0, ctx->curr.y, width,2, theme.text_color, 0.0, 1.0, 1.0, true,false);
+    gfx_draw_rect_xywh(ctx->curr.x + width/2.0, ctx->curr.y, width,2, theme.color_text, 0.0, 1.0, 1.0, true,false);
 
     ctx->curr.y += (2+theme.text_padding);
 }
@@ -716,16 +697,16 @@ void imgui_color_picker(char* label, uint32_t* result)
     imgui_set_spacing(2);
     imgui_horizontal_begin();
         
-        Vector2f s1 = imgui_number_box(lr, 0, 255, &r);
-        Vector2f s2 = imgui_number_box(lg, 0, 255, &g);
-        Vector2f s3 = imgui_number_box(lb, 0, 255, &b);
+        Vector2f s1 = imgui_number_box_formatted(lr, 0, 255, "%02X", &r);
+        Vector2f s2 = imgui_number_box_formatted(lg, 0, 255, "%02X", &g);
+        Vector2f s3 = imgui_number_box_formatted(lb, 0, 255, "%02X", &b);
         *result = COLOR((uint8_t)r,(uint8_t)g,(uint8_t)b);
 
         Vector2f text_size = gfx_string_get_size(theme.text_scale, new_label);
         Rect box = {ctx->curr.x,ctx->curr.y, 20, text_size.y+2.0*theme.text_padding};
         draw_color_box(&box,*result);
 
-        draw_label(ctx->curr.x + box.w + theme.text_padding, ctx->curr.y-(text_size.y-box.h)/2.0, theme.text_color, new_label);
+        draw_label(ctx->curr.x + box.w + theme.text_padding, ctx->curr.y-(text_size.y-box.h)/2.0, theme.color_text, new_label);
 
         ctx->curr.w = s1.x + s2.x + s3.x + box.w + text_size.x + 2.0*theme.text_padding;
         ctx->curr.h = MAX(text_size.y,box.h);
@@ -739,7 +720,7 @@ void imgui_slider_float(char* label, float min, float max, float* result)
     progress_pos();
 }
 
-Vector2f imgui_number_box(char* label, int min, int max, int* result)
+Vector2f imgui_number_box_formatted(char* label, int min, int max, char* format, int* result)
 {
     uint32_t hash = hash_str(label,strlen(label),0x0);
 
@@ -778,7 +759,7 @@ Vector2f imgui_number_box(char* label, int min, int max, int* result)
     Rect interactive = {ctx->curr.x, ctx->curr.y, theme.number_box_width, text_size.y + 2*theme.text_padding};
     handle_highlighting(hash, &interactive);
 
-    draw_number_box(hash, new_label, &interactive, *val,max);
+    draw_number_box(hash, new_label, &interactive, *val,max,format);
 
     ctx->curr.w = theme.number_box_width + text_size.x + theme.spacing;
     ctx->curr.h = text_size.y + 2*theme.text_padding + theme.spacing;
@@ -789,6 +770,11 @@ Vector2f imgui_number_box(char* label, int min, int max, int* result)
 
     Vector2f ret = {ctx->curr.w, ctx->curr.h};
     return ret;
+}
+
+Vector2f imgui_number_box(char* label, int min, int max, int* result)
+{
+    return imgui_number_box_formatted(label, min, max, "%d", result);
 }
 
 void imgui_text_box(char* label, char* buf, int bufsize)
@@ -891,9 +877,7 @@ Vector2f imgui_draw_demo(int x, int y)
 {
     imgui_begin_panel("Demo", x,y);
 
-        imgui_set_text_size(28);
-        imgui_text("Demo");
-        imgui_set_text_size(12);
+        imgui_text_sized(28, "Demo");
         imgui_text_colored(0x00FF00FF, "My name is %s", "Chris");
         imgui_text_colored(0x0000FFFF, "My name is %s", "Kam");
 
@@ -937,69 +921,91 @@ Vector2f imgui_draw_demo(int x, int y)
 static bool _editor_test = false;
 static char _editor_text[20]= {0};
 static char _editor_file_name[32] = {0};
+static bool save_result = false;
+static bool saved = false;
+static char theme_files[32][32] = {0};
+static char* theme_file_ptrs[32] = {0};
+static int prior_selected_theme = 0;
+
+static bool save_theme(char* file_name)
+{
+    char file_path[64]= {0};
+    snprintf(file_path,63,"src/themes/%s.theme",file_name);
+    FILE* fp = fopen(file_path,"wb");
+    if(fp)
+    {
+        size_t n = fwrite(&theme,sizeof(ImGuiTheme),1,fp);
+        fclose(fp);
+        return (n > 0);
+    }
+
+    return false;
+}
+
+static bool load_theme(char* file_name)
+{
+    char file_path[64]= {0};
+    snprintf(file_path,63,"src/themes/%s",file_name);
+    FILE* fp = fopen(file_path,"rb");
+    if(fp)
+    {
+        size_t n = fread(&theme,sizeof(ImGuiTheme),1,fp);
+        fclose(fp);
+        return (n > 0);
+    }
+}
 
 void imgui_theme_editor()
 {
-    float prior_text_size = theme.text_size_px;
-    int prior_spacing = theme.spacing;
-    imgui_set_text_size(8);
-    imgui_set_spacing(2);
+    imgui_text_sized(24,"Theme Editor");
+    imgui_horizontal_line();
+
+    int num_files = io_get_files_in_dir("src/themes/", ".theme", theme_files);
+    for(int i = 0; i < num_files; ++i)
+        theme_file_ptrs[i] = (char*)theme_files[i];
+
+    int selected_theme = imgui_dropdown(theme_file_ptrs, num_files, "Theme");
+    if(selected_theme != prior_selected_theme)
+    {
+        load_theme(theme_file_ptrs[selected_theme]);
+        prior_selected_theme = selected_theme;
+    }
 
     int header_size = 12;
-    imgui_text_sized(header_size,"General");
+    imgui_text_sized(header_size,"Colors");
+    imgui_indent_begin(10);
+    imgui_color_picker("Text", &theme.color_text);
+    imgui_color_picker("Background", &theme.color_background);
+    imgui_color_picker("Highlight", &theme.color_highlight);
+    imgui_color_picker("Highlight Subtle", &theme.color_highlight_subtle);
+    imgui_color_picker("Active", &theme.color_active);
+    imgui_color_picker("Panel", &theme.color_panel);
+    imgui_color_picker("Slider", &theme.color_slider);
+
+    if(imgui_button("Randomize Colors"))
+    {
+        theme.color_text             = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_background       = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_highlight        = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_highlight_subtle = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_active           = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_panel            = COLOR(RAND8(),RAND8(),RAND8());
+        theme.color_slider           = COLOR(RAND8(),RAND8(),RAND8());
+    }
+
+    imgui_indent_end();
+
+    imgui_text_sized(header_size,"Settings");
     imgui_indent_begin(10);
     imgui_number_box("Spacing", 0, 100, &theme.spacing);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Text");
-    imgui_indent_begin(10);
     imgui_slider_float("Text Size", 0.0, 100.0, &theme.text_size_px);
-    imgui_color_picker("Text Color", &theme.text_color);
+    imgui_set_text_size(theme.text_size_px);
     imgui_number_box("Text Padding", 0, 20, &theme.text_padding);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Buttons");
-    imgui_indent_begin(10);
-    imgui_color_picker("Button Background", &theme.button_color_background);
-    imgui_color_picker("Button Foreground", &theme.button_color_foreground);
-    imgui_color_picker("Button Highlighted", &theme.button_color_background_highlighted);
-    imgui_color_picker("Button Active", &theme.button_color_background_active);
     imgui_slider_float("Button Opacity", 0.0,1.0,&theme.button_opacity);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Checkboxes");
-    imgui_indent_begin(10);
     imgui_number_box("Checkbox Size", 0, 100, &theme.checkbox_size);
-    imgui_checkbox("Test##Checkbox",&_editor_test);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Sliders");
-    imgui_indent_begin(10);
-    imgui_color_picker("Slider Background", &theme.slider_color_background);
-    imgui_color_picker("Slider Foreground", &theme.slider_color_foreground);
-    imgui_color_picker("Handle Color", &theme.slider_color_handle);
-    imgui_color_picker("Handle Highlighted", &theme.slider_color_handle_highlighted);
-    imgui_color_picker("Handle Active", &theme.slider_color_handle_active);
-    //imgui_slider_float("Slider Width", 0.0,500.0,&theme.slider_width);
     imgui_slider_float("Slider Handle Width", 0.0,50.0,&theme.slider_handle_width);
     imgui_slider_float("Slider Opacity", 0.0,1.0,&theme.slider_opacity);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Number Box");
-    imgui_indent_begin(10);
     imgui_number_box("Number box width", 0, 100, &theme.number_box_width);
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Input Text");
-    imgui_indent_begin(10);
-    imgui_color_picker("text_box Background", &theme.text_box_color_background);
-    imgui_color_picker("text_box Highlighted", &theme.text_box_color_highlighted);
-    imgui_text_box("Test##text_box",_editor_text,IM_ARRAYSIZE(_editor_text));
-    imgui_indent_end();
-
-    imgui_text_sized(header_size,"Panels");
-    imgui_indent_begin(10);
-    imgui_color_picker("Panel Color", &theme.panel_color);
     imgui_slider_float("Panel Opacity", 0.0,1.0,&theme.panel_opacity);
     imgui_number_box("Panel min width", 0, 1000, &theme.panel_min_width);
     imgui_indent_end();
@@ -1011,26 +1017,21 @@ void imgui_theme_editor()
 
     imgui_horizontal_begin();
     imgui_text_box("File Name##file_name",_editor_file_name,IM_ARRAYSIZE(_editor_file_name));
+
     if(imgui_button("Save"))
     {
-        char file_path[64]= {0};
-        snprintf(file_path,63,"src/themes/%s.theme",_editor_file_name);
-        FILE* fp = fopen(file_path,"wb");
-        if(fp)
-        {
-            fwrite(&theme,sizeof(ImGuiTheme),1,fp);
-            LOGI("Saved theme: %s",file_path);
-            fclose(fp);
-        }
+        saved = true;
+        save_result = save_theme(_editor_file_name);
+    }
+
+    if(saved)
+    {
+        if(save_result)
+            imgui_text_colored(0x0000FF00, "File saved!");
         else
-        {
-            LOGW("Failed to save file %s\n",file_path);
-        }
+            imgui_text_colored(0x00FF0000, "Failed to Save file!");
     }
     imgui_horizontal_end();
-
-    imgui_set_text_size(prior_text_size);
-    imgui_set_spacing(prior_spacing);
 }
 
 void imgui_deselect_text_box()
@@ -1152,45 +1153,29 @@ static inline void clear_active()
 
 static void set_default_theme()
 {
-    // set theme
-    // text
+
+    // colors
+    theme.color_text             = 0xFFFFFFFF;
+    theme.color_background       = 0x55555555;
+    theme.color_highlight        = 0xAAAAAAAA;
+    theme.color_highlight_subtle = 0x66666666;
+    theme.color_active           = 0x0000AAAA;
+    theme.color_panel            = 0x20202020;
+    theme.color_slider           = 0x88888888;
+
+    // settings
     theme.spacing = 8;
-    theme.text_size_px = 20.0;
+    theme.text_size_px = 12.0;
     theme.text_scale = theme.text_size_px / NOMINAL_FONT_SIZE;
-    theme.text_color = 0xFFFFFFFF;
     theme.text_padding = 4;
-
-    // checkbox
-    theme.checkbox_size = 10;
-
-    // button
-    theme.button_color_background = 0x55555555;
-    theme.button_color_background_highlighted = 0xAAAAAAAA;
-    theme.button_color_background_active = 0x0000AAAA;
-    theme.button_color_foreground = 0xFFFFFFFF;
-    theme.button_opacity = 0.8;
-
-    // slider
-    theme.slider_color_foreground = 0xFFFFFFFF;
-    theme.slider_color_background = 0x55555555;
-    theme.slider_color_handle = 0x8888888;
-    theme.slider_color_handle_highlighted = 0xAAAAAAAA;
-    theme.slider_color_handle_active = 0x0000AAAA;
+    theme.text_box_width = 150;
+    theme.text_box_height = 22;
+    theme.number_box_width = 40;
     theme.slider_width = 132.0;
     theme.slider_handle_width = 16;
     theme.slider_opacity = 0.8;
-
-    // number box
-    theme.number_box_width = 40;
-
-    // text_box
-    theme.text_box_color_background = 0x55555555;
-    theme.text_box_color_highlighted = 0x66666666;
-    theme.text_box_width = 150;
-    theme.text_box_height = 22;
-
-    // panel
-    theme.panel_color = 0x20202020;
+    theme.button_opacity = 0.8;
+    theme.checkbox_size = 10;
     theme.panel_opacity = 0.85;
     theme.panel_min_width = 200;
     theme.panel_spacing = 8;
@@ -1379,76 +1364,76 @@ static void handle_tooltip(uint32_t hash)
 static void draw_button(uint32_t hash, char* str, Rect* r)
 {
     // draw button
-    uint32_t button_color = theme.button_color_background;
+    uint32_t button_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        button_color = theme.button_color_background_highlighted;
+        button_color = theme.color_highlight;
     }
     if(is_active(hash))
     {
-        button_color = theme.button_color_background_active;
+        button_color = theme.color_active;
     }
 
     gfx_draw_rect_xywh(r->x + r->w/2.0, r->y + r->h/2.0, r->w, r->h, button_color, 0.0, 1.0, theme.button_opacity, true,false);
 
-    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, str);
+    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_image_button(uint32_t hash, char* str, Rect* r, int img_index, int sprite_index,float scale)
 {
     // draw button
-    uint32_t button_color = theme.button_color_background;
+    uint32_t button_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        button_color = theme.button_color_background_highlighted;
+        button_color = theme.color_highlight;
     }
     if(is_active(hash))
     {
-        button_color = theme.button_color_background_active;
+        button_color = theme.color_active;
     }
 
     gfx_draw_image_ignore_light(img_index, sprite_index, r->x + r->w/2.0, r->y + r->h/2.0, COLOR_TINT_NONE, scale, 0.0, 1.0, true,false);
     gfx_draw_rect_xywh(r->x + r->w/2.0, r->y + r->h/2.0, r->w, r->h, button_color, 0.0, 1.0, 0.3, true,false);
 
-    gfx_draw_string(r->x + r->w + theme.text_padding, r->y, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, str);
+    gfx_draw_string(r->x + r->w + theme.text_padding, r->y, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_toggle_button(uint32_t hash, char* str, Rect* r, bool toggled)
 {
     // draw button
-    uint32_t button_color = theme.button_color_background;
+    uint32_t button_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        button_color = theme.button_color_background_highlighted;
+        button_color = theme.color_highlight;
     }
     if(toggled)
     {
-        button_color = theme.button_color_background_active;
+        button_color = theme.color_active;
     }
 
     gfx_draw_rect_xywh(r->x + r->w/2.0, r->y + r->h/2.0, r->w, r->h, button_color, 0.0, 1.0, theme.button_opacity, true,false);
 
-    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, str);
+    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format, float val)
 {
     // draw bar
-    gfx_draw_rect_xywh(ctx->curr.x + ctx->curr.w/2.0, ctx->curr.y + ctx->curr.h/2.0, ctx->curr.w, ctx->curr.h, theme.slider_color_background, 0.0, 1.0, theme.slider_opacity, true,false);
+    gfx_draw_rect_xywh(ctx->curr.x + ctx->curr.w/2.0, ctx->curr.y + ctx->curr.h/2.0, ctx->curr.w, ctx->curr.h, theme.color_background, 0.0, 1.0, theme.slider_opacity, true,false);
 
     // draw handle
-    uint32_t handle_color = theme.slider_color_handle;
+    uint32_t handle_color = theme.color_slider;
 
     if(is_highlighted(hash))
     {
-        handle_color = theme.slider_color_handle_highlighted;
+        handle_color = theme.color_highlight;
     }
     if(is_active(hash))
     {
-        handle_color = theme.slider_color_handle_active;
+        handle_color = theme.color_active;
     }
 
     gfx_draw_rect_xywh(ctx->curr.x + theme.slider_handle_width/2.0 + slider_x, ctx->curr.y + ctx->curr.h/2.0, theme.slider_handle_width-4, ctx->curr.h-4, handle_color, 0.0, 1.0, theme.slider_opacity, true,false);
@@ -1457,29 +1442,29 @@ static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format
     char val_str[16] = {0};
     snprintf(val_str,15,val_format,val);
     Vector2f val_size = gfx_string_get_size(theme.text_scale, val_str);
-    gfx_draw_string(ctx->curr.x + (ctx->curr.w-val_size.x)/2.0, ctx->curr.y + theme.text_padding, theme.slider_color_foreground, theme.text_scale, 0.0, 1.0, false, false, val_str);
+    gfx_draw_string(ctx->curr.x + (ctx->curr.w-val_size.x)/2.0, ctx->curr.y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, val_str);
 
     // draw label
-    gfx_draw_string(ctx->curr.x + ctx->curr.w + theme.text_padding, ctx->curr.y + theme.text_padding, theme.slider_color_foreground, theme.text_scale, 0.0, 1.0, false, false, str);
+    gfx_draw_string(ctx->curr.x + ctx->curr.w + theme.text_padding, ctx->curr.y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_panel()
 {
-    gfx_draw_rect_xywh(ctx->start_x+ctx->panel_width/2.0, ctx->start_y+ctx->panel_height/2.0, ctx->panel_width, ctx->panel_height+theme.spacing, theme.panel_color, 0.0, 1.0, theme.panel_opacity,true,false);
+    gfx_draw_rect_xywh(ctx->start_x+ctx->panel_width/2.0, ctx->start_y+ctx->panel_height/2.0, ctx->panel_width, ctx->panel_height+theme.spacing, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
 }
 
 static void draw_checkbox(uint32_t hash, char* label, bool result)
 {
     // draw button
-    uint32_t check_color = theme.button_color_background;
+    uint32_t check_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        check_color = theme.button_color_background_highlighted;
+        check_color = theme.color_highlight;
     }
     if(is_active(hash))
     {
-        check_color = theme.button_color_background_active;
+        check_color = theme.color_active;
     }
 
     Vector2f text_size = gfx_string_get_size(theme.text_scale, label);
@@ -1491,23 +1476,23 @@ static void draw_checkbox(uint32_t hash, char* label, bool result)
     gfx_draw_rect_xywh(x,y, theme.checkbox_size, theme.checkbox_size, check_color, 0.0, 1.0, 1.0, false,false);
     gfx_draw_rect_xywh(x,y, theme.checkbox_size-4, theme.checkbox_size-4, check_color, 0.0, 1.0, 1.0, result,false);
 
-    gfx_draw_string(ctx->curr.x + theme.checkbox_size + theme.text_padding, ctx->curr.y + (theme.checkbox_size - text_size.y)/2.0, theme.text_color, theme.text_scale, 0.0, 1.0, false, false, label);
+    gfx_draw_string(ctx->curr.x + theme.checkbox_size + theme.text_padding, ctx->curr.y + (theme.checkbox_size - text_size.y)/2.0, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, label);
 
     ctx->curr.w = theme.checkbox_size + 2.0*theme.text_padding + text_size.x;
     ctx->curr.h = MAX(theme.checkbox_size, text_size.y)+2.0*theme.text_padding;
 }
 
-static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max)
+static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max, char* format)
 {
-    uint32_t box_color = theme.button_color_background;
+    uint32_t box_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        box_color = theme.button_color_background_highlighted;
+        box_color = theme.color_highlight;
     }
     if(is_active(hash))
     {
-        box_color = theme.button_color_background_active;
+        box_color = theme.color_active;
     }
 
     float pct = val/(float)max;
@@ -1516,20 +1501,20 @@ static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int ma
     gfx_draw_rect_xywh(r->x + (r->w*pct)/2.0, r->y + r->h/2.0, r->w*pct, r->h, 0x00FFFFFF, 0.0, 1.0, 0.4,true,false);
 
     char val_str[16] = {0};
-    snprintf(val_str,15,"%d",val);
+    snprintf(val_str,15,format,val);
     Vector2f val_size = gfx_string_get_size(theme.text_scale, val_str);
 
-    draw_label(r->x + (r->w - val_size.x)/2.0 , r->y + (r->h-val_size.y)/2.0, theme.button_color_foreground,val_str);
-    draw_label(r->x + r->w + theme.text_padding, r->y + (r->h-val_size.y)/2.0, theme.button_color_foreground, label);
+    draw_label(r->x + (r->w - val_size.x)/2.0 , r->y + (r->h-val_size.y)/2.0, theme.color_text,val_str);
+    draw_label(r->x + r->w + theme.text_padding, r->y + (r->h-val_size.y)/2.0, theme.color_text, label);
 }
 
 static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text)
 {
-    uint32_t box_color = theme.text_box_color_background;
+    uint32_t box_color = theme.color_background;
 
     if(is_highlighted(hash))
     {
-        box_color = theme.text_box_color_highlighted;
+        box_color = theme.color_highlight_subtle;
     }
 
     Vector2f label_size = gfx_string_get_size(theme.text_scale, label);
@@ -1546,7 +1531,7 @@ static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text)
 
     gfx_draw_rect_xywh(sx + sw/2.0, sy + sh/2.0, sw, sh, 0x000055CC, 0.0, 1.0, theme.button_opacity, true,false);
 
-    gfx_draw_string(r->x+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.text_color, theme.text_scale, 0.0, 1.0, false, false, text);
+    gfx_draw_string(r->x+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, text);
 
     if(ctx->focused_text_id == hash)
     {
@@ -1555,24 +1540,25 @@ static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text)
         float x = r->x+theme.text_padding+ctx->text_box_props.text_cursor_x;
         float y = r->y-(text_size.y-r->h)/2.0f;
 
-        gfx_draw_rect_xywh(x,y+(text_size.y*1.3)/2.0, 1, text_size.y*1.3, theme.text_color, 0.0, 1.0, 1.0, true,false);
+        gfx_draw_rect_xywh(x,y+(text_size.y*1.3)/2.0, 1, text_size.y*1.3, theme.color_text, 0.0, 1.0, 1.0, true,false);
     }
 
-    draw_label(r->x + r->w+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.text_color, label);
+    draw_label(r->x + r->w+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.color_text, label);
 }
 
 static void draw_dropdown(uint32_t hash, char* str, char* options[], int num_options, Rect* r)
 {
+
     // draw button
-    uint32_t button_color = theme.button_color_background;
+    uint32_t button_color = theme.color_background;
 
     if(is_active(hash))
     {
-        button_color = theme.button_color_background_active;
+        button_color = theme.color_active;
     }
     else if(is_highlighted(hash))
     {
-        button_color = theme.button_color_background_highlighted;
+        button_color = theme.color_highlight;
     }
 
     float box_height = NOMINAL_FONT_SIZE*theme.text_scale + 2*theme.text_padding;
@@ -1586,8 +1572,8 @@ static void draw_dropdown(uint32_t hash, char* str, char* options[], int num_opt
     bool active = is_active(hash);
 
     char* selected_text = options[selection];
-    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, selected_text);
-    gfx_draw_string(r->x + theme.text_padding + r->w - 16, r->y + theme.text_padding, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, active ? "-" : "+");
+    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, selected_text);
+    gfx_draw_string(r->x + theme.text_padding + r->w - 16, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, active ? "-" : "+");
 
     if(active)
     {
@@ -1600,20 +1586,24 @@ static void draw_dropdown(uint32_t hash, char* str, char* options[], int num_opt
         {
             if(is_highlighted(hash) && i == highlighted_index)
             {
-                color = theme.button_color_background_highlighted;
+                color = theme.color_highlight;
             }
             else
             {
-                color = theme.button_color_background;
+                color = theme.color_background;
             }
 
             gfx_draw_rect_xywh(r->x + r->w/2.0, r->y + (i+1.5)*box_height, r->w, box_height, color, 0.0, 1.0, theme.button_opacity, true,false);
-            gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding + (i+1)*box_height, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, options[i]);
+
+            if(options[i])
+            {
+                gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding + (i+1)*box_height, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, options[i]);
+            }
         }
     }
 
     // label
-    gfx_draw_string(r->x + r->w + theme.text_padding, r->y + theme.text_padding, theme.button_color_foreground, theme.text_scale, 0.0, 1.0, false, false, str);
+    gfx_draw_string(r->x + r->w + theme.text_padding, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_label(int x, int y, uint32_t color, char* label)
@@ -1636,6 +1626,6 @@ static void draw_tooltip()
     r.y -= r.h;
 
     gfx_draw_rect_xywh(r.x + r.w/2.0, r.y + r.h/2.0, r.w, r.h, 0x00323232, 0.0, 1.0, 0.75, true,false);
-    gfx_draw_string(r.x+theme.text_padding, r.y-(text_size.y-r.h)/2.0, theme.text_color, scale, 0.0, 1.0, false, false, ctx->tooltip);
+    gfx_draw_string(r.x+theme.text_padding, r.y-(text_size.y-r.h)/2.0, theme.color_text, scale, 0.0, 1.0, false, false, ctx->tooltip);
 
 }
