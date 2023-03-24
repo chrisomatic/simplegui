@@ -24,7 +24,11 @@ int imgui_dropdown(char* options[], int num_options, char* label);
 void imgui_tooltip(char* tooltip, ...);
 
 Vector2f imgui_draw_demo(int x, int y); // for showcasing widgets
+
+// theme
 void imgui_theme_editor(); // for editing theme properties
+void imgui_theme_selector();
+bool imgui_load_theme(char* file_name);
 
 void imgui_store_theme();
 void imgui_restore_theme();

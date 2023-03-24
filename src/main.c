@@ -8,10 +8,6 @@
 #include "imgui.h"
 #include "log.h"
 
-// Settings
-// #define VIEW_WIDTH   1812
-// #define VIEW_HEIGHT  1359
-
 // =========================
 // Global Vars
 // =========================
@@ -34,12 +30,6 @@ void draw();
 // =========================
 
 int main(int argc, char* argv[])
-{
-    start_gui();
-    return 0;
-}
-
-void start_gui()
 {
     LOGI("--------------");
     LOGI("Starting GUI");
@@ -88,6 +78,7 @@ void start_gui()
     }
 
     deinit();
+    return 0;
 }
 
 void init()
@@ -111,6 +102,8 @@ void init()
 
     LOGI(" - Graphics.");
     gfx_init(VIEW_WIDTH, VIEW_HEIGHT);
+
+    imgui_load_theme("nord_deep.theme");
 }
 
 void deinit()
@@ -119,25 +112,71 @@ void deinit()
     window_deinit();
 }
 
-// variables used to store state
-// demo vars
-int num_clicks = 0;
-uint32_t color1 = 0x00FE2225;
-uint32_t color2 = 0x002468F2;
-float v1 = 0.0;
-float v2 = 0.0;
-char name[20] = {'H','e','l','l','o','\0'};
-char something[20] = {0};
-bool my_check = true;
-int ri = 10;
-bool toggle = false;
-bool thing1 = false, thing2 = false;
+int command_runner(char* cmd, char output[100][100+1])
+{
+    //int status = system(cmd);
+    //int exitcode = status / 256;
+
+    LOGI("Running command: %s\n",cmd);
+
+    FILE * fp = popen(cmd, "r");
+
+    if(!fp)
+    {
+        LOGE("Command failed to run");
+        return 0;
+    }
+
+    char line[100+1] = {0};
+    int line_count = 0;
+
+    for(;;)
+    {
+        if(fgets(line,100,fp) == NULL)
+            break;
+
+        memset(output[line_count],0,100);
+        memcpy(output[line_count++],line,MIN(100,strlen(line)-1));
+    }
+
+    fclose(fp);
+
+    return line_count;
+}
+
+static char lines[100][100+1] = {0};
+static int line_count = 0;
 
 void draw()
 {
     gfx_clear_buffer(50,50,50);
 
     imgui_draw_demo(10,10);
+
+    /*
+    static char command[100] = {0};
+    imgui_begin_panel("Command Runner", 500, 10);
+        imgui_theme_selector();
+        imgui_text_sized(24,"Command Runner");
+        imgui_horizontal_line();
+        imgui_horizontal_begin();
+
+            imgui_text_box("Command",command,IM_ARRAYSIZE(command));
+            if(imgui_button("Run"))
+            {
+                line_count = command_runner(command, lines);
+            }
+
+        imgui_horizontal_end();
+
+        imgui_text_sized(16, "Output");
+        for(int i = 0; i < line_count; ++i)
+        {
+            imgui_text("%03d: %s",i, lines[i]);
+        }
+
+    imgui_end();
+    */
 
     imgui_begin_panel("Theme",500,10);
         imgui_theme_editor();

@@ -83,8 +83,6 @@ typedef struct
 
     DropdownProps dropdown_props;
 
-    bool theme_initialized;
-
 } ImGuiContext;
 
 typedef struct
@@ -102,6 +100,7 @@ typedef struct
     float text_scale;
     int text_padding;
     float button_opacity;
+    int button_min_width;
     int checkbox_size;
     float slider_width;
     float slider_handle_width;
@@ -121,6 +120,7 @@ static ImGuiTheme theme;
 static ImGuiTheme stored_theme;
 
 static ImGuiContext* ctx;
+static bool theme_initialized = false;
 
 static inline bool is_mouse_inside(int x, int y, int width, int height);
 static inline bool is_highlighted(uint32_t hash);
@@ -148,7 +148,7 @@ static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format
 static void draw_color_box(Rect* r, uint32_t color);
 static void draw_label(int x, int y, uint32_t color, char* label);
 static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max, char* format);
-static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text);
+static void draw_text_box(uint32_t hash, char* label, Rect* r, char* text);
 static void draw_dropdown(uint32_t hash, char* str, char** options, int num_options, Rect* r);
 static void draw_panel();
 static void draw_tooltip();
@@ -175,10 +175,9 @@ void imgui_begin(char* name, int x, int y)
     ctx->has_tooltip = false;
     ctx->tooltip_hash = 0x0;
 
-    if(!ctx->theme_initialized)
+    if(!theme_initialized)
     {
         set_default_theme();
-        ctx->theme_initialized = true;
     }
 
     ctx->prior_mouse_x = ctx->mouse_x;
@@ -228,6 +227,22 @@ void imgui_restore_theme()
 void imgui_set_slider_width(int width)
 {
     theme.slider_width = width;
+}
+
+bool imgui_load_theme(char* file_name)
+{
+    char file_path[64]= {0};
+    snprintf(file_path,63,"src/themes/%s",file_name);
+    FILE* fp = fopen(file_path,"rb");
+    if(fp)
+    {
+        size_t n = fread(&theme,sizeof(ImGuiTheme),1,fp);
+        fclose(fp);
+        bool success = (n > 0);
+        theme_initialized = success;
+        return success;
+    }
+    return false;
 }
 
 void imgui_text(char* text, ...)
@@ -381,13 +396,13 @@ bool imgui_button(char* label, ...)
     }
 
     Vector2f text_size = gfx_string_get_size(theme.text_scale, new_label);
-
-    Rect interactive = {ctx->curr.x, ctx->curr.y, text_size.x + 2*theme.text_padding, text_size.y + 2*theme.text_padding};
+    int width = MAX(theme.button_min_width, text_size.x + 2*theme.text_padding);
+    Rect interactive = {ctx->curr.x, ctx->curr.y, width, text_size.y + 2*theme.text_padding};
     handle_highlighting(hash, &interactive);
 
     draw_button(hash, new_label, &interactive);
 
-    ctx->curr.w = text_size.x + 2*theme.text_padding + theme.spacing;
+    ctx->curr.w = width; 
     ctx->curr.h = text_size.y + 2*theme.text_padding + theme.spacing;
 
     progress_pos();
@@ -788,11 +803,14 @@ void imgui_text_box(char* label, char* buf, int bufsize)
     int array_size = 0;
     gfx_string_get_size_array(theme.text_scale, &size_array[1],99,&array_size, buf);
 
-    if(ctx->text_box_props.text_cursor_index >= bufsize)
-        ctx->text_box_props.text_cursor_index = bufsize-1;
+    if(ctx->focused_text_id == hash)
+    {
+        if(ctx->text_box_props.text_cursor_index >= bufsize)
+            ctx->text_box_props.text_cursor_index = bufsize-1;
 
-    ctx->text_box_props.text_cursor_x = size_array[ctx->text_box_props.text_cursor_index];
-    ctx->text_box_props.text_cursor_x_held_from = size_array[ctx->text_box_props.text_cursor_index_held_from];
+        ctx->text_box_props.text_cursor_x = size_array[ctx->text_box_props.text_cursor_index];
+        ctx->text_box_props.text_cursor_x_held_from = size_array[ctx->text_box_props.text_cursor_index_held_from];
+    }
 
     if(is_highlighted(hash))
     {
@@ -828,6 +846,8 @@ void imgui_text_box(char* label, char* buf, int bufsize)
 
             if(mouse_went_down)
             {
+                printf("Setting buf (size: %d)\n",bufsize);
+
                 window_controls_set_text_buf(buf,bufsize);
                 window_controls_set_key_mode(KEY_MODE_TEXT);
                 ctx->text_box_props.text_click_held = true;
@@ -838,16 +858,19 @@ void imgui_text_box(char* label, char* buf, int bufsize)
         }
     }
 
-    if(ctx->text_box_props.text_click_held && window_mouse_left_went_up())
+    if(ctx->focused_text_id == hash)
     {
-        ctx->text_box_props.text_click_held = false;
-    }
+        if(ctx->text_box_props.text_click_held && window_mouse_left_went_up())
+        {
+            ctx->text_box_props.text_click_held = false;
+        }
 
-    int str_size = strlen(buf);
-    if(ctx->text_box_props.text_cursor_index > str_size)
-    {
-        ctx->text_box_props.text_cursor_index = str_size;
-        ctx->text_box_props.text_cursor_x = size_array[str_size];
+        int str_size = strlen(buf);
+        if(ctx->text_box_props.text_cursor_index > str_size)
+        {
+            ctx->text_box_props.text_cursor_index = str_size;
+            ctx->text_box_props.text_cursor_x = size_array[str_size];
+        }
     }
 
     Vector2f text_size = gfx_string_get_size(theme.text_scale, new_label);
@@ -855,7 +878,7 @@ void imgui_text_box(char* label, char* buf, int bufsize)
     Rect interactive = {ctx->curr.x, ctx->curr.y, theme.text_box_width, theme.text_box_height};
     handle_highlighting(hash, &interactive);
 
-    draw_input_box(hash, new_label, &interactive, buf);
+    draw_text_box(hash, new_label, &interactive, buf);
 
     ctx->curr.w = theme.text_box_width + text_size.x + theme.text_padding + theme.spacing;
     ctx->curr.h = theme.text_box_height + theme.spacing;
@@ -867,11 +890,15 @@ void imgui_text_box(char* label, char* buf, int bufsize)
 static int num_clicks = 0;
 static uint32_t color1 = 0x00FE2225;
 static uint32_t color2 = 0x002468F2;
-static char name[20] = {'H','e','l','l','o','\0'};
+static float v1 = 0.0;
+static float v2 = 0.0;
+static char name[32] = {0};
 static char something[20] = {0};
+static char something2[30] = {0};
 static bool my_check = true;
 static int ri = 10;
 static bool toggle = false;
+static bool thing1 = false, thing2 = false;
 
 Vector2f imgui_draw_demo(int x, int y)
 {
@@ -888,17 +915,14 @@ Vector2f imgui_draw_demo(int x, int y)
         imgui_text_colored(0xFFFFFFFF, "Num clicks: %d", num_clicks);
 
         imgui_button("Dumb Button");
-        float v1 = 0.0;
-        float v2 = 0.0;
         imgui_slider_float("Slider 1", 0.0,1.0,&v1);
         imgui_slider_float("Slider 2", 0.0,1.0,&v2);
 
         imgui_checkbox("Checkbox 1",&my_check);
 
-        bool thing;
         imgui_indent_begin(12);
-            imgui_checkbox("whatever",&thing);
-            imgui_checkbox("dawg",&thing);
+            imgui_checkbox("whatever",&thing1);
+            imgui_checkbox("dawg",&thing2);
         imgui_indent_end();
 
         imgui_number_box("Some Int##haha",0, 100, &ri);
@@ -906,8 +930,9 @@ Vector2f imgui_draw_demo(int x, int y)
         imgui_color_picker("Color 1", &color1);
         imgui_color_picker("Color 2", &color2);
         imgui_text_colored(0xFFFFFFFF, "Test");
-        imgui_text_box("Name",name,IM_ARRAYSIZE(name));
-        imgui_text_box("Something else",something,IM_ARRAYSIZE(something));
+        imgui_text_box("Name##demo_name",name,IM_ARRAYSIZE(name));
+        imgui_text_box("Another Thing",something,IM_ARRAYSIZE(something));
+        imgui_text_box("Another One",something2,IM_ARRAYSIZE(something2));
         imgui_toggle_button(&toggle, "Toggle me");
 
         char* buttons[] = {"Apples", "Bananas", "Oranges"};
@@ -920,12 +945,26 @@ Vector2f imgui_draw_demo(int x, int y)
 
 static bool _editor_test = false;
 static char _editor_text[20]= {0};
-static char _editor_file_name[32] = {0};
+static char _editor_file_name[40] = {0};
 static bool save_result = false;
 static bool saved = false;
 static char theme_files[32][32] = {0};
 static char* theme_file_ptrs[32] = {0};
 static int prior_selected_theme = 0;
+
+void imgui_theme_selector()
+{
+    int num_files = io_get_files_in_dir("src/themes/", ".theme", theme_files);
+    for(int i = 0; i < num_files; ++i)
+        theme_file_ptrs[i] = (char*)theme_files[i];
+
+    int selected_theme = imgui_dropdown(theme_file_ptrs, num_files, "Theme");
+    if(selected_theme != prior_selected_theme)
+    {
+        imgui_load_theme(theme_file_ptrs[selected_theme]);
+        prior_selected_theme = selected_theme;
+    }
+}
 
 static bool save_theme(char* file_name)
 {
@@ -942,34 +981,12 @@ static bool save_theme(char* file_name)
     return false;
 }
 
-static bool load_theme(char* file_name)
-{
-    char file_path[64]= {0};
-    snprintf(file_path,63,"src/themes/%s",file_name);
-    FILE* fp = fopen(file_path,"rb");
-    if(fp)
-    {
-        size_t n = fread(&theme,sizeof(ImGuiTheme),1,fp);
-        fclose(fp);
-        return (n > 0);
-    }
-}
-
 void imgui_theme_editor()
 {
     imgui_text_sized(24,"Theme Editor");
     imgui_horizontal_line();
+    imgui_theme_selector();
 
-    int num_files = io_get_files_in_dir("src/themes/", ".theme", theme_files);
-    for(int i = 0; i < num_files; ++i)
-        theme_file_ptrs[i] = (char*)theme_files[i];
-
-    int selected_theme = imgui_dropdown(theme_file_ptrs, num_files, "Theme");
-    if(selected_theme != prior_selected_theme)
-    {
-        load_theme(theme_file_ptrs[selected_theme]);
-        prior_selected_theme = selected_theme;
-    }
 
     int header_size = 12;
     imgui_text_sized(header_size,"Colors");
@@ -1002,6 +1019,7 @@ void imgui_theme_editor()
     imgui_set_text_size(theme.text_size_px);
     imgui_number_box("Text Padding", 0, 20, &theme.text_padding);
     imgui_slider_float("Button Opacity", 0.0,1.0,&theme.button_opacity);
+    imgui_number_box("Button Min Width", 1,200,&theme.button_min_width);
     imgui_number_box("Checkbox Size", 0, 100, &theme.checkbox_size);
     imgui_slider_float("Slider Handle Width", 0.0,50.0,&theme.slider_handle_width);
     imgui_slider_float("Slider Opacity", 0.0,1.0,&theme.slider_opacity);
@@ -1153,7 +1171,6 @@ static inline void clear_active()
 
 static void set_default_theme()
 {
-
     // colors
     theme.color_text             = 0xFFFFFFFF;
     theme.color_background       = 0x55555555;
@@ -1175,10 +1192,13 @@ static void set_default_theme()
     theme.slider_handle_width = 16;
     theme.slider_opacity = 0.8;
     theme.button_opacity = 0.8;
+    theme.button_min_width = 72;
     theme.checkbox_size = 10;
     theme.panel_opacity = 0.85;
     theme.panel_min_width = 200;
     theme.panel_spacing = 8;
+
+    theme_initialized = true;
 }
 
 static void progress_pos()
@@ -1377,7 +1397,8 @@ static void draw_button(uint32_t hash, char* str, Rect* r)
 
     gfx_draw_rect_xywh(r->x + r->w/2.0, r->y + r->h/2.0, r->w, r->h, button_color, 0.0, 1.0, theme.button_opacity, true,false);
 
-    gfx_draw_string(r->x + theme.text_padding, r->y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
+    Vector2f val_size = gfx_string_get_size(theme.text_scale, str); // for centering text on button
+    gfx_draw_string(r->x + (r->w - val_size.x)/2.0, r->y + (r->h - val_size.y)/2.0, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
 static void draw_image_button(uint32_t hash, char* str, Rect* r, int img_index, int sprite_index,float scale)
@@ -1508,7 +1529,7 @@ static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int ma
     draw_label(r->x + r->w + theme.text_padding, r->y + (r->h-val_size.y)/2.0, theme.color_text, label);
 }
 
-static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text)
+static void draw_text_box(uint32_t hash, char* label, Rect* r, char* text)
 {
     uint32_t box_color = theme.color_background;
 
@@ -1529,7 +1550,8 @@ static void draw_input_box(uint32_t hash, char* label, Rect* r, char* text)
     float sw = ABS(ctx->text_box_props.text_cursor_x_held_from - ctx->text_box_props.text_cursor_x);
     float sh = r->h;
 
-    gfx_draw_rect_xywh(sx + sw/2.0, sy + sh/2.0, sw, sh, 0x000055CC, 0.0, 1.0, theme.button_opacity, true,false);
+    if(ctx->focused_text_id == hash)
+        gfx_draw_rect_xywh(sx + sw/2.0, sy + sh/2.0, sw, sh, 0x000055CC, 0.0, 1.0, theme.button_opacity, true,false);
 
     gfx_draw_string(r->x+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, text);
 
@@ -1627,5 +1649,4 @@ static void draw_tooltip()
 
     gfx_draw_rect_xywh(r.x + r.w/2.0, r.y + r.h/2.0, r.w, r.h, 0x00323232, 0.0, 1.0, 0.75, true,false);
     gfx_draw_string(r.x+theme.text_padding, r.y-(text_size.y-r.h)/2.0, theme.color_text, scale, 0.0, 1.0, false, false, ctx->tooltip);
-
 }
