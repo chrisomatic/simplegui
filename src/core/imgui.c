@@ -846,8 +846,6 @@ void imgui_text_box(char* label, char* buf, int bufsize)
 
             if(mouse_went_down)
             {
-                printf("Setting buf (size: %d)\n",bufsize);
-
                 window_controls_set_text_buf(buf,bufsize);
                 window_controls_set_key_mode(KEY_MODE_TEXT);
                 ctx->text_box_props.text_click_held = true;
@@ -1062,36 +1060,54 @@ void imgui_deselect_text_box()
     window_controls_set_key_mode(KEY_MODE_NORMAL);
 }
 
+static ImGuiContext* get_active_textbox_context()
+{
+    ImGuiContext* active_ctx = NULL;
+    for(int i = 0; i < MAX_CONTEXTS; ++i)
+    {
+        if(contexts[i].focused_text_id != 0x0)
+        {
+            return &contexts[i];
+        }
+    }
+    return &default_context;
+}
+
 int imgui_get_text_cursor_index()
 {
-    return ctx->text_box_props.text_cursor_index;
+    ImGuiContext* active_ctx = get_active_textbox_context();
+    return active_ctx->text_box_props.text_cursor_index;
 }
 
 void imgui_set_text_cursor_indices(int i0, int i1)
 {
-    ctx->text_box_props.text_cursor_index = i0;
-    ctx->text_box_props.text_cursor_index_held_from = i1;
+    ImGuiContext* active_ctx = get_active_textbox_context();
+    active_ctx->text_box_props.text_cursor_index = i0;
+    active_ctx->text_box_props.text_cursor_index_held_from = i1;
 }
 
 void imgui_get_text_cursor_indices(int* i0, int* i1)
 {
-    if(ctx->text_box_props.text_cursor_index <= ctx->text_box_props.text_cursor_index_held_from)
+    ImGuiContext* active_ctx = get_active_textbox_context();
+    if(active_ctx->text_box_props.text_cursor_index <= active_ctx->text_box_props.text_cursor_index_held_from)
     {
-        *i0 = ctx->text_box_props.text_cursor_index;
-        *i1 = ctx->text_box_props.text_cursor_index_held_from;
+        *i0 = active_ctx->text_box_props.text_cursor_index;
+        *i1 = active_ctx->text_box_props.text_cursor_index_held_from;
     }
     else
     {
-        *i0 = ctx->text_box_props.text_cursor_index_held_from;
-        *i1 = ctx->text_box_props.text_cursor_index;
+        *i0 = active_ctx->text_box_props.text_cursor_index_held_from;
+        *i1 = active_ctx->text_box_props.text_cursor_index;
     }
 }
 
 void imgui_text_cursor_inc(int val)
 {
-    ctx->text_box_props.text_cursor_index += val;
-    ctx->text_box_props.text_cursor_index = MAX(0,ctx->text_box_props.text_cursor_index);
-    ctx->text_box_props.text_cursor_index_held_from = ctx->text_box_props.text_cursor_index;
+    ImGuiContext* active_ctx = get_active_textbox_context();
+
+    active_ctx->text_box_props.text_cursor_index += val;
+    active_ctx->text_box_props.text_cursor_index = MAX(0,active_ctx->text_box_props.text_cursor_index);
+    active_ctx->text_box_props.text_cursor_index_held_from = active_ctx->text_box_props.text_cursor_index;
 }
 
 Vector2f imgui_end()
@@ -1557,12 +1573,11 @@ static void draw_text_box(uint32_t hash, char* label, Rect* r, char* text)
 
     if(ctx->focused_text_id == hash)
     {
-        Vector2f text_size = gfx_string_get_size(theme.text_scale, text);
-        //ctx->focused_text_cursor_index;
         float x = r->x+theme.text_padding+ctx->text_box_props.text_cursor_x;
-        float y = r->y-(text_size.y-r->h)/2.0f;
+        float y = r->y-(theme.text_size_px-r->h)/2.0f;
 
-        gfx_draw_rect_xywh(x,y+(text_size.y*1.3)/2.0, 1, text_size.y*1.3, theme.color_text, 0.0, 1.0, 1.0, true,false);
+        // line on text box
+        gfx_draw_rect_xywh(x,y+(theme.text_size_px*1.3)/2.0, 1, theme.text_size_px*1.3, theme.color_text, 0.0, 1.0, 1.0, true,false); 
     }
 
     draw_label(r->x + r->w+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.color_text, label);
