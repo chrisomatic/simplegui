@@ -565,7 +565,7 @@ int imgui_dropdown(char* options[], int num_options, char* label)
         }
     }
 
-    max_width += 16; // size of arrow
+    max_width += 16; // size of +/-
 
     bool active = is_active(hash);
 
@@ -598,7 +598,7 @@ int imgui_dropdown(char* options[], int num_options, char* label)
 
     int display_count = active ? num_options +1 : 1;
 
-    Rect interactive = {ctx->curr.x, ctx->curr.y, max_width+2*theme.text_padding, display_count* (max_height+2*theme.text_padding)};
+    Rect interactive = {ctx->curr.x, ctx->curr.y, max_width+2*theme.text_padding, display_count*max_height};
     handle_highlighting(hash, &interactive);
 
     if(active)
@@ -1379,7 +1379,7 @@ static bool dropdown_on_top(uint32_t hash, Rect* r)
             return false;
         }
 
-        if(rectangles_colliding(&ctx->dropdown_props.size,r))
+        if(rectangles_colliding2(&ctx->dropdown_props.size,r))
         {
             return true;
         }
