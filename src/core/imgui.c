@@ -13,6 +13,7 @@
 #define MAX_INT_LOOKUPS 256
 #define MAX_HORIZONTAL_STACK 10
 #define MAX_TOOLTIP_LEN 256
+#define CURSOR_BLINK_TIME 0.5
 
 #define DRAW_DEBUG_BOXES 0
 
@@ -33,6 +34,10 @@ typedef struct
     float text_cursor_x_held_from;
     float text_cursor_x;
 
+    bool cursor_show;
+    double cursor_blink_time;
+    double cursor_blink_t0;
+
     bool highlighted;
 } TextBoxProps;
 
@@ -50,6 +55,13 @@ typedef struct
 
 typedef struct
 {
+    int panel_width;
+    int panel_height;
+    bool draggable; // todo
+} PanelProps;
+
+typedef struct
+{
     uint32_t hash;
 
     uint32_t highlighted_id;
@@ -60,7 +72,6 @@ typedef struct
     Rect curr;
 
     int start_x, start_y;
-    int panel_width, panel_height;
     int max_width;
     int accum_width;
     int horiontal_max_height;
@@ -75,6 +86,7 @@ typedef struct
     int prior_mouse_x, prior_mouse_y;
     int mouse_x, mouse_y;
 
+    PanelProps panel_props;
     TextBoxProps text_box_props;
 
     bool has_tooltip;
@@ -85,8 +97,11 @@ typedef struct
 
 } ImGuiContext;
 
+#define IMGUI_THEME_VERSION 0
 typedef struct
 {
+    uint32_t version;
+
     uint32_t color_text;
     uint32_t color_background;
     uint32_t color_highlight;
@@ -189,8 +204,12 @@ void imgui_begin(char* name, int x, int y)
 void imgui_begin_panel(char* name, int x, int y)
 {
     imgui_begin(name, x,y);
+    char new_label[256] = {0};
+    mask_off_hidden(name, new_label, 256);
     draw_panel();
     ctx->curr.x += theme.panel_spacing;
+    imgui_text_sized(24,new_label);
+    imgui_horizontal_line();
 }
 
 void imgui_set_text_size(float pxsize)
@@ -305,7 +324,7 @@ void imgui_newline()
 
 void imgui_horizontal_line()
 {
-    float width = ctx->panel_width - theme.spacing - 2.0*theme.text_padding;
+    float width = ctx->panel_props.panel_width - theme.spacing - 2.0*theme.text_padding;
     gfx_draw_rect_xywh(ctx->curr.x + width/2.0, ctx->curr.y, width,2, theme.color_text, 0.0, 1.0, 1.0, true,false);
 
     ctx->curr.y += (2+theme.text_padding);
@@ -810,6 +829,16 @@ void imgui_text_box(char* label, char* buf, int bufsize)
 
         ctx->text_box_props.text_cursor_x = size_array[ctx->text_box_props.text_cursor_index];
         ctx->text_box_props.text_cursor_x_held_from = size_array[ctx->text_box_props.text_cursor_index_held_from];
+
+        // handle cursor blink state
+        if(ctx->text_box_props.cursor_blink_time >= CURSOR_BLINK_TIME)
+        {
+            ctx->text_box_props.cursor_blink_time = 0.0;
+            ctx->text_box_props.cursor_show = !ctx->text_box_props.cursor_show;
+        }
+
+        ctx->text_box_props.cursor_blink_time += (timer_get_time() - ctx->text_box_props.cursor_blink_t0);
+        ctx->text_box_props.cursor_blink_t0 = timer_get_time();
     }
 
     if(is_highlighted(hash))
@@ -841,6 +870,9 @@ void imgui_text_box(char* label, char* buf, int bufsize)
             }
 
             ctx->focused_text_id = hash;
+            ctx->text_box_props.cursor_show = true;
+            ctx->text_box_props.cursor_blink_time = 0.0;
+            ctx->text_box_props.cursor_blink_t0 = timer_get_time();
             ctx->text_box_props.text_cursor_index = selected_index;
             ctx->text_box_props.text_cursor_x = size_array[selected_index];
 
@@ -902,7 +934,6 @@ Vector2f imgui_draw_demo(int x, int y)
 {
     imgui_begin_panel("Demo", x,y);
 
-        imgui_text_sized(28, "Demo");
         imgui_text_colored(0x00FF00FF, "My name is %s", "Chris");
         imgui_text_colored(0x0000FFFF, "My name is %s", "Kam");
 
@@ -966,6 +997,8 @@ void imgui_theme_selector()
 
 static bool save_theme(char* file_name)
 {
+    theme.version = IMGUI_THEME_VERSION;
+
     char file_path[64]= {0};
     snprintf(file_path,63,"src/themes/%s.theme",file_name);
     FILE* fp = fopen(file_path,"wb");
@@ -981,10 +1014,9 @@ static bool save_theme(char* file_name)
 
 void imgui_theme_editor()
 {
-    imgui_text_sized(24,"Theme Editor");
-    imgui_horizontal_line();
+    //imgui_text_sized(24,"Theme Editor");
+    //imgui_horizontal_line();
     imgui_theme_selector();
-
 
     int header_size = 12;
     imgui_text_sized(header_size,"Colors");
@@ -1039,6 +1071,7 @@ void imgui_theme_editor()
         saved = true;
         save_result = save_theme(_editor_file_name);
     }
+    imgui_horizontal_end();
 
     if(saved)
     {
@@ -1047,7 +1080,6 @@ void imgui_theme_editor()
         else
             imgui_text_colored(0x00FF0000, "Failed to Save file!");
     }
-    imgui_horizontal_end();
 }
 
 void imgui_deselect_text_box()
@@ -1112,8 +1144,8 @@ void imgui_text_cursor_inc(int val)
 
 Vector2f imgui_end()
 {
-    ctx->panel_width = MAX(theme.panel_min_width,ctx->max_width+2.0*theme.spacing);
-    ctx->panel_height = (ctx->curr.y-ctx->start_y);
+    ctx->panel_props.panel_width = MAX(theme.panel_min_width,ctx->max_width+2.0*theme.spacing);
+    ctx->panel_props.panel_height = (ctx->curr.y-ctx->start_y);
 
     bool text_highlighted = false;
     for(int i = 0; i < MAX_CONTEXTS; ++i)
@@ -1141,7 +1173,7 @@ Vector2f imgui_end()
         draw_tooltip();
     }
 
-    Vector2f size = {ctx->panel_width, ctx->panel_height};
+    Vector2f size = {ctx->panel_props.panel_width, ctx->panel_props.panel_height};
     return size;
 }
 
@@ -1487,7 +1519,7 @@ static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format
 
 static void draw_panel()
 {
-    gfx_draw_rect_xywh(ctx->start_x+ctx->panel_width/2.0, ctx->start_y+ctx->panel_height/2.0, ctx->panel_width, ctx->panel_height+theme.spacing, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
+    gfx_draw_rect_xywh(ctx->start_x+ctx->panel_props.panel_width/2.0, ctx->start_y+ctx->panel_props.panel_height/2.0, ctx->panel_props.panel_width, ctx->panel_props.panel_height+theme.spacing, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
 }
 
 static void draw_checkbox(uint32_t hash, char* label, bool result)
@@ -1577,7 +1609,10 @@ static void draw_text_box(uint32_t hash, char* label, Rect* r, char* text)
         float y = r->y-(theme.text_size_px-r->h)/2.0f;
 
         // line on text box
-        gfx_draw_rect_xywh(x,y+(theme.text_size_px*1.3)/2.0, 1, theme.text_size_px*1.3, theme.color_text, 0.0, 1.0, 1.0, true,false); 
+        if(ctx->text_box_props.cursor_show)
+        {
+            gfx_draw_rect_xywh(x,y+(theme.text_size_px*1.3)/2.0, 1, theme.text_size_px*1.3, theme.color_text, 0.0, 1.0, 1.0, true,false); 
+        }
     }
 
     draw_label(r->x + r->w+theme.text_padding, r->y-(label_size.y-r->h)/2.0, theme.color_text, label);

@@ -146,10 +146,17 @@ int command_runner(char* cmd, char output[100][100+1])
 
 static char lines[100][100+1] = {0};
 static int line_count = 0;
+static uint32_t background_color = 0x00303030;
+
+int num_clicks = 0;
+float v1 = 0.0;
 
 void draw()
 {
-    gfx_clear_buffer(50,50,50);
+    uint8_t r = background_color >> 16;
+    uint8_t g = background_color >> 8;
+    uint8_t b = background_color >> 0;
+    gfx_clear_buffer(r,g,b);
 
     imgui_draw_demo(10,10);
 
@@ -179,21 +186,7 @@ void draw()
     */
 
     imgui_begin_panel("Theme",500,10);
+        imgui_color_picker("Window Background Color", &background_color);
         imgui_theme_editor();
     imgui_end();
-
-#if 0
-    imgui_begin_panel("Editor", 10, 10);
-
-        imgui_store_theme();
-        imgui_text_sized(28,"Test");
-        if(imgui_button("Hello"))
-        {
-            num_clicks++;
-        }
-        imgui_text_colored(0x00FFFF00,"Num clicks: %d",num_clicks);
-
-        imgui_restore_theme();
-    Vector2f size = imgui_end();
-#endif
 }
