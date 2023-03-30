@@ -3,7 +3,7 @@
 #define IM_ARRAYSIZE(_ARR) ((int)(sizeof(_ARR) / sizeof(*(_ARR))))
 
 void imgui_begin(char* name, int x, int y);
-void imgui_begin_panel(char* name, int x, int y);
+void imgui_begin_panel(char* name, int x, int y, bool moveable);
 Vector2f imgui_end(); // returns size of imgui area
 
 // widgets

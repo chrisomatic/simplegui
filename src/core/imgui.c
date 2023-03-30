@@ -165,7 +165,7 @@ static void draw_label(int x, int y, uint32_t color, char* label);
 static void draw_number_box(uint32_t hash, char* label, Rect* r, int val, int max, char* format);
 static void draw_text_box(uint32_t hash, char* label, Rect* r, char* text);
 static void draw_dropdown(uint32_t hash, char* str, char** options, int num_options, Rect* r);
-static void draw_panel();
+static void draw_panel(uint32_t hash, bool moveable);
 static void draw_tooltip();
 
 void imgui_begin(char* name, int x, int y)
@@ -201,16 +201,27 @@ void imgui_begin(char* name, int x, int y)
     window_get_mouse_view_coords(&ctx->mouse_x, &ctx->mouse_y);
 }
 
-void imgui_begin_panel(char* name, int x, int y)
+void imgui_begin_panel(char* name, int x, int y, bool moveable)
 {
     imgui_begin(name, x,y);
+
+    uint32_t hash = hash_str(name,strlen(name),0x0);
+
+    if(moveable)
+    {
+        Rect interactive = {ctx->curr.x, ctx->curr.y, ctx->panel_props.panel_width, 20};
+        handle_highlighting(hash, &interactive);
+    }
+
+    draw_panel(hash, moveable);
+    ctx->curr.x += theme.panel_spacing;
+
     char new_label[256] = {0};
     mask_off_hidden(name, new_label, 256);
-    draw_panel();
-    ctx->curr.x += theme.panel_spacing;
-    imgui_text_sized(24,new_label);
-    imgui_horizontal_line();
+    imgui_text_sized(16,new_label);
+    imgui_horizontal_line(1);
 }
+
 
 void imgui_set_text_size(float pxsize)
 {
@@ -322,10 +333,10 @@ void imgui_newline()
     ctx->curr.y += theme.text_size_px;
 }
 
-void imgui_horizontal_line()
+void imgui_horizontal_line(int thickness)
 {
-    float width = ctx->panel_props.panel_width - theme.spacing - 2.0*theme.text_padding;
-    gfx_draw_rect_xywh(ctx->curr.x + width/2.0, ctx->curr.y, width,2, theme.color_text, 0.0, 1.0, 1.0, true,false);
+    float width = ctx->panel_props.panel_width;//  - theme.spacing - 2.0*theme.text_padding;
+    gfx_draw_rect_xywh(ctx->start_x + width/2.0, ctx->curr.y, width,thickness, theme.color_text, 0.0, 1.0, 1.0, true,false);
 
     ctx->curr.y += (2+theme.text_padding);
 }
@@ -932,7 +943,7 @@ static bool thing1 = false, thing2 = false;
 
 Vector2f imgui_draw_demo(int x, int y)
 {
-    imgui_begin_panel("Demo", x,y);
+    imgui_begin_panel("Demo", x,y,true);
 
         imgui_text_colored(0x00FF00FF, "My name is %s", "Chris");
         imgui_text_colored(0x0000FFFF, "My name is %s", "Kam");
@@ -1014,8 +1025,6 @@ static bool save_theme(char* file_name)
 
 void imgui_theme_editor()
 {
-    //imgui_text_sized(24,"Theme Editor");
-    //imgui_horizontal_line();
     imgui_theme_selector();
 
     int header_size = 12;
@@ -1517,9 +1526,16 @@ static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format
     gfx_draw_string(ctx->curr.x + ctx->curr.w + theme.text_padding, ctx->curr.y + theme.text_padding, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, str);
 }
 
-static void draw_panel()
+static void draw_panel(uint32_t hash, bool moveable)
 {
     gfx_draw_rect_xywh(ctx->start_x+ctx->panel_props.panel_width/2.0, ctx->start_y+ctx->panel_props.panel_height/2.0, ctx->panel_props.panel_width, ctx->panel_props.panel_height+theme.spacing, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
+
+    if(moveable)
+    {
+        // draw header rect
+        uint32_t color = is_highlighted(hash) ? theme.color_highlight : theme.color_highlight_subtle;
+        gfx_draw_rect_xywh(ctx->start_x+ctx->panel_props.panel_width/2.0, ctx->start_y+20/2.0, ctx->panel_props.panel_width, 20, color, 0.0, 1.0, theme.panel_opacity,true,false);
+    }
 }
 
 static void draw_checkbox(uint32_t hash, char* label, bool result)
@@ -1540,10 +1556,10 @@ static void draw_checkbox(uint32_t hash, char* label, bool result)
 
     // draw check
     float x = ctx->curr.x + theme.checkbox_size/2.0;
-    float y = ctx->curr.y + (theme.checkbox_size+4)/2.0;
+    float y = ctx->curr.y + theme.checkbox_size/2.0;
 
-    gfx_draw_rect_xywh(x,y, theme.checkbox_size, theme.checkbox_size, check_color, 0.0, 1.0, 1.0, false,false);
-    gfx_draw_rect_xywh(x,y, theme.checkbox_size-4, theme.checkbox_size-4, check_color, 0.0, 1.0, 1.0, result,false);
+    gfx_draw_rect_xywh(x,y,theme.checkbox_size, theme.checkbox_size, check_color, 0.0, 1.0, 1.0, false,false);
+    gfx_draw_rect_xywh(x,y,0.65*theme.checkbox_size, 0.65*theme.checkbox_size, check_color, 0.0, 1.0, 1.0, result,false);
 
     gfx_draw_string(ctx->curr.x + theme.checkbox_size + theme.text_padding, ctx->curr.y + (theme.checkbox_size - text_size.y)/2.0, theme.color_text, theme.text_scale, 0.0, 1.0, false, false, label);
 

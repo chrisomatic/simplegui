@@ -185,7 +185,7 @@ void draw()
     imgui_end();
     */
 
-    imgui_begin_panel("Theme",500,10);
+    imgui_begin_panel("Theme",500,10, false);
         imgui_color_picker("Window Background Color", &background_color);
         imgui_theme_editor();
     imgui_end();
