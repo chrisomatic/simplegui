@@ -154,6 +154,7 @@ static IntLookup* get_int_lookup(uint32_t hash);
 static void progress_pos();
 static void mask_off_hidden(char* label, char* new_label, int max_size);
 static void set_default_theme();
+static ImGuiContext* get_active_textbox_context();
 
 static void draw_button(uint32_t hash, char* str, Rect* r);
 static void draw_image_button(uint32_t hash, char* str, Rect* r, int img_index, int sprite_index,float scale);
@@ -947,6 +948,15 @@ void imgui_text_box(char* label, char* buf, int bufsize)
     ctx->curr.h = theme.text_box_height + theme.spacing;
 
     progress_pos();
+}
+
+void imgui_reset_cursor_blink()
+{
+    ImGuiContext* active_ctx = get_active_textbox_context();
+
+    active_ctx->text_box_props.cursor_blink_time = 0.0;
+    active_ctx->text_box_props.cursor_show = true;
+    active_ctx->text_box_props.cursor_blink_t0 = timer_get_time();
 }
 
 // demo vars

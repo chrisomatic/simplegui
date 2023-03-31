@@ -53,3 +53,4 @@ void imgui_horizontal_line();
 void imgui_horizontal_begin();
 void imgui_horizontal_end();
 void imgui_deselect_text_box();
+void imgui_reset_cursor_blink();
