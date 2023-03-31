@@ -57,7 +57,7 @@ typedef struct
 {
     int panel_width;
     int panel_height;
-    bool draggable; // todo
+    int offset_x, offset_y;
 } PanelProps;
 
 typedef struct
@@ -126,7 +126,7 @@ typedef struct
     float panel_opacity;
     int panel_min_width;
     int panel_spacing;
-
+    int panel_header_height;
 } ImGuiTheme;
 
 static ImGuiContext contexts[MAX_CONTEXTS] = {0};
@@ -205,20 +205,43 @@ void imgui_begin_panel(char* name, int x, int y, bool moveable)
 {
     imgui_begin(name, x,y);
 
+    ctx->curr.x = ctx->start_x + ctx->panel_props.offset_x;
+    ctx->curr.y = ctx->start_y + ctx->panel_props.offset_y;
+
     uint32_t hash = hash_str(name,strlen(name),0x0);
 
     if(moveable)
     {
-        Rect interactive = {ctx->curr.x, ctx->curr.y, ctx->panel_props.panel_width, 20};
+        if(is_active(hash))
+        {
+            ctx->panel_props.offset_x += (ctx->mouse_x - ctx->prior_mouse_x);
+            ctx->panel_props.offset_y += (ctx->mouse_y - ctx->prior_mouse_y);
+
+            if(window_mouse_left_went_up())
+                clear_active();
+        }
+        else if(is_highlighted(hash))
+        {
+            if(window_mouse_left_went_down())
+            {
+                set_active(hash);
+            }
+        }
+
+        Rect interactive = {ctx->curr.x, ctx->curr.y, ctx->panel_props.panel_width, theme.panel_header_height};
         handle_highlighting(hash, &interactive);
     }
 
     draw_panel(hash, moveable);
-    ctx->curr.x += theme.panel_spacing;
+
 
     char new_label[256] = {0};
     mask_off_hidden(name, new_label, 256);
+    ctx->curr.x += 8;
     imgui_text_sized(16,new_label);
+    ctx->curr.x -= 8;
+
+    ctx->curr.x += theme.panel_spacing;
     imgui_horizontal_line(1);
 }
 
@@ -336,7 +359,7 @@ void imgui_newline()
 void imgui_horizontal_line(int thickness)
 {
     float width = ctx->panel_props.panel_width;//  - theme.spacing - 2.0*theme.text_padding;
-    gfx_draw_rect_xywh(ctx->start_x + width/2.0, ctx->curr.y, width,thickness, theme.color_text, 0.0, 1.0, 1.0, true,false);
+    gfx_draw_rect_xywh(ctx->curr.x - theme.panel_spacing + width/2.0, ctx->curr.y, width,thickness, theme.color_text, 0.0, 1.0, 1.0, true,false);
 
     ctx->curr.y += (2+theme.text_padding);
 }
@@ -379,7 +402,7 @@ void imgui_horizontal_end()
 
     if(!ctx->is_horizontal)
     {
-        ctx->curr.x = ctx->start_x + theme.panel_spacing + ctx->indent_amount;
+        ctx->curr.x = ctx->start_x + theme.panel_spacing + ctx->indent_amount + ctx->panel_props.offset_x;
         ctx->curr.y += ctx->horiontal_max_height;
 
         ctx->horiontal_max_height = 0;
@@ -652,7 +675,6 @@ int imgui_dropdown(char* options[], int num_options, char* label)
 
     ctx->curr.w = interactive.w + 2*theme.text_padding + theme.spacing;
     ctx->curr.h = max_height + 4*theme.text_padding + theme.spacing;
-    //ctx->curr.h = interactive.h + 2*theme.text_padding + theme.spacing;
 
 
     progress_pos();
@@ -990,7 +1012,7 @@ static bool save_result = false;
 static bool saved = false;
 static char theme_files[32][32] = {0};
 static char* theme_file_ptrs[32] = {0};
-static int prior_selected_theme = 0;
+static int prior_selected_theme = -1;
 
 void imgui_theme_selector()
 {
@@ -1065,6 +1087,8 @@ void imgui_theme_editor()
     imgui_number_box("Number box width", 0, 100, &theme.number_box_width);
     imgui_slider_float("Panel Opacity", 0.0,1.0,&theme.panel_opacity);
     imgui_number_box("Panel min width", 0, 1000, &theme.panel_min_width);
+    imgui_number_box("Panel Spacing", 0, 100, &theme.panel_spacing);
+    imgui_number_box("Panel Header Height", 0, 100, &theme.panel_header_height);
     imgui_indent_end();
 
     if(imgui_button("Defaults"))
@@ -1153,8 +1177,8 @@ void imgui_text_cursor_inc(int val)
 
 Vector2f imgui_end()
 {
-    ctx->panel_props.panel_width = MAX(theme.panel_min_width,ctx->max_width+2.0*theme.spacing);
-    ctx->panel_props.panel_height = (ctx->curr.y-ctx->start_y);
+    ctx->panel_props.panel_width = MAX(theme.panel_min_width,ctx->max_width+2.0*theme.spacing+theme.panel_spacing);
+    ctx->panel_props.panel_height = (ctx->curr.y-ctx->start_y-ctx->panel_props.offset_y);
 
     bool text_highlighted = false;
     for(int i = 0; i < MAX_CONTEXTS; ++i)
@@ -1254,6 +1278,7 @@ static void set_default_theme()
     theme.panel_opacity = 0.85;
     theme.panel_min_width = 200;
     theme.panel_spacing = 8;
+    theme.panel_header_height = 20;
 
     theme_initialized = true;
 }
@@ -1528,13 +1553,13 @@ static void draw_slider(uint32_t hash, char* str, int slider_x, char* val_format
 
 static void draw_panel(uint32_t hash, bool moveable)
 {
-    gfx_draw_rect_xywh(ctx->start_x+ctx->panel_props.panel_width/2.0, ctx->start_y+ctx->panel_props.panel_height/2.0, ctx->panel_props.panel_width, ctx->panel_props.panel_height+theme.spacing, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
+    gfx_draw_rect_xywh(ctx->curr.x+ctx->panel_props.panel_width/2.0, ctx->curr.y+ctx->panel_props.panel_height/2.0, ctx->panel_props.panel_width, ctx->panel_props.panel_height, theme.color_panel, 0.0, 1.0, theme.panel_opacity,true,false);
 
     if(moveable)
     {
         // draw header rect
         uint32_t color = is_highlighted(hash) ? theme.color_highlight : theme.color_highlight_subtle;
-        gfx_draw_rect_xywh(ctx->start_x+ctx->panel_props.panel_width/2.0, ctx->start_y+20/2.0, ctx->panel_props.panel_width, 20, color, 0.0, 1.0, theme.panel_opacity,true,false);
+        gfx_draw_rect_xywh(ctx->curr.x+ctx->panel_props.panel_width/2.0, ctx->curr.y+theme.panel_header_height/2.0, ctx->panel_props.panel_width, theme.panel_header_height, color, 0.0, 1.0, theme.panel_opacity,true,false);
     }
 }
 

@@ -103,7 +103,7 @@ void init()
     LOGI(" - Graphics.");
     gfx_init(VIEW_WIDTH, VIEW_HEIGHT);
 
-    imgui_load_theme("nord_deep.theme");
+    //imgui_load_theme("nord_deep.theme");
 }
 
 void deinit()
