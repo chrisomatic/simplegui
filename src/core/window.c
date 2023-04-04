@@ -515,6 +515,44 @@ static void key_callback(GLFWwindow* window, int key, int scan_code, int action,
                     imgui_set_text_cursor_indices(i0,i0);
                 }
             }
+            else if(key == GLFW_KEY_A)
+            {
+                if(control)
+                {
+                    imgui_set_text_cursor_indices(0,strlen(text_buf));
+                }
+            }
+            else if(key == GLFW_KEY_C)
+            {
+                if(control)
+                {
+                    char temp_buf[100] = {0};
+                    memcpy(temp_buf,text_buf+i0,(i1-i0)*sizeof(char));
+                    window_set_clipboard(temp_buf);
+                }
+            }
+            else if(key == GLFW_KEY_V)
+            {
+                if(control)
+                {
+                    const char* clip = window_get_clipboard();
+
+                    // remove any highlighted text when typing
+                    if(i1 > i0)
+                    {
+                        for(int i = i0; i < i1; ++i)
+                            window_text_mode_buf_remove(i0+1,true);
+                        imgui_set_text_cursor_indices(i0,i0);
+                    }
+
+                    // insert character
+                    for(int i = 0 ; i < strlen(clip); ++i)
+                    {
+                        windows_text_mode_buf_insert(clip[i],i0+i);
+                        imgui_text_cursor_inc(1);
+                    }
+                }
+            }
             else if(key == GLFW_KEY_LEFT)
             {
                 if(control)
@@ -737,4 +775,12 @@ void window_text_mode_buf_remove(int index, bool backspace)
     }
 }
 
+const char* window_get_clipboard()
+{
+    return glfwGetClipboardString(window);
+}
 
+void window_set_clipboard(const char* clip)
+{
+    glfwSetClipboardString(window, clip);
+}
